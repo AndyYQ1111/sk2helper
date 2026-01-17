@@ -1,5 +1,9 @@
 # 更新日志
 
+## 0.0.4
+### 🐛 Fixes
+- Fix parameter name inconsistency
+
 ## 0.0.3
 ### 🐛 Fixes
 - Fixed method channel naming consistency

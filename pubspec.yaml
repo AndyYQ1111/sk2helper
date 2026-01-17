@@ -1,6 +1,6 @@
 name: sk2helper
 description: A StoreKit 2 helper plugin for Flutter
-version: 0.0.3
+version: 0.0.4
 homepage: https://github.com/AndyYQ1111/sk2helper.git
 
 environment:

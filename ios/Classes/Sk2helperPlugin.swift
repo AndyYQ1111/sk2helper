@@ -2,7 +2,7 @@ import Flutter
 import StoreKit
 import UIKit
 
-public class SK2Plugin: NSObject, FlutterPlugin {
+public class Sk2helperPlugin: NSObject, FlutterPlugin {
 
     // ================= 初始化状态（惰性初始化） =================
     private static var initialized = false
@@ -22,7 +22,7 @@ public class SK2Plugin: NSObject, FlutterPlugin {
             name: "sk2helper",
             binaryMessenger: registrar.messenger()
         )
-        let instance = SK2Plugin()
+        let instance = Sk2helperPlugin()
         registrar.addMethodCallDelegate(instance, channel: channel)
     }
 
@@ -67,7 +67,11 @@ public class SK2Plugin: NSObject, FlutterPlugin {
         result: @escaping FlutterResult
     ) {
         switch call.method {
-
+        case "initialize":
+            Task {
+                await Sk2helperPlugin.ensureInitialized()
+                result(nil)
+            }
         case "fetchProducts":
             handleFetchProducts(call, result: result)
 
@@ -98,7 +102,7 @@ public class SK2Plugin: NSObject, FlutterPlugin {
         result: @escaping FlutterResult
     ) {
         Task {
-            await SK2Plugin.ensureInitialized()
+            await Sk2helperPlugin.ensureInitialized()
 
             guard let args = call.arguments as? [String: Any],
                 let productIds = args["productIds"] as? [String]
@@ -154,10 +158,9 @@ public class SK2Plugin: NSObject, FlutterPlugin {
 
             if let intro = sub.introductoryOffer {
                 data["introOffer"] = intro.paymentMode.rawValue
-                data["introPeriod"] =
-                    "\(intro.period.value) \(intro.period.unit)"
+                data["introPeriod"] = "\(intro.period.value) \(intro.period.unit)"
                 data["hasTrial"] =
-                    intro.paymentMode == .free || intro.paymentMode == .payAsYouGo
+                    intro.paymentMode == .freeTrial || intro.paymentMode == .payAsYouGo
             } else {
                 data["introOffer"] = ""
                 data["introPeriod"] = ""
@@ -182,7 +185,7 @@ public class SK2Plugin: NSObject, FlutterPlugin {
         result: @escaping FlutterResult
     ) {
         Task {
-            await SK2Plugin.ensureInitialized()
+            await Sk2helperPlugin.ensureInitialized()
 
             guard let args = call.arguments as? [String: Any],
                 let productId = args["productId"] as? String
@@ -235,7 +238,7 @@ public class SK2Plugin: NSObject, FlutterPlugin {
     @available(iOS 15.0, *)
     private func handleRestorePurchases(_ result: @escaping FlutterResult) {
         Task {
-            await SK2Plugin.ensureInitialized()
+            await Sk2helperPlugin.ensureInitialized()
 
             SK2Handler.restorePurchases { success, items, error in
                 if success {
@@ -256,7 +259,7 @@ public class SK2Plugin: NSObject, FlutterPlugin {
     @available(iOS 15.0, *)
     private func handleHasActiveSubscription(_ result: @escaping FlutterResult) {
         Task {
-            await SK2Plugin.ensureInitialized()
+            await Sk2helperPlugin.ensureInitialized()
             let active = await SK2Handler.hasActiveSubscription()
             result(active)
         }
@@ -266,7 +269,7 @@ public class SK2Plugin: NSObject, FlutterPlugin {
     @available(iOS 15.0, *)
     private func handleGetPurchaseHistory(_ result: @escaping FlutterResult) {
         Task {
-            await SK2Plugin.ensureInitialized()
+            await Sk2helperPlugin.ensureInitialized()
             let history = await SK2Handler.getPurchaseHistory()
             result(history)
         }
@@ -279,7 +282,7 @@ public class SK2Plugin: NSObject, FlutterPlugin {
         result: @escaping FlutterResult
     ) {
         Task {
-            await SK2Plugin.ensureInitialized()
+            await Sk2helperPlugin.ensureInitialized()
 
             guard let args = call.arguments as? [String: Any],
                 let productId = args["productId"] as? String

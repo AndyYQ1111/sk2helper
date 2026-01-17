@@ -35,13 +35,13 @@ class Sk2helper {
   }
 
   /// 获取产品列表
-  static Future<List<Product>> fetchProducts(List<String> productIDs) async {
+  static Future<List<Product>> fetchProducts(List<String> productIds) async {
     await _ensureInitialized();
 
     try {
       final List<dynamic> productList = await _methodChannel.invokeMethod(
         'fetchProducts',
-        {"productIDs": productIDs},
+        {"productIds": productIds},
       );
 
       return productList.map((product) {
