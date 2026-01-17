@@ -1,21 +1,33 @@
-// ios/Classes/SK2Handler.swift
 import StoreKit
 import Foundation
 
 @available(iOS 15.0, *)
 class SK2Handler {
-    
-    // 初始化
+
+    // ================= 全局监听状态 =================
+    private static var updatesTask: Task<Void, Never>?
+
+    // MARK: - Initialize (NON-BLOCKING)
     static func initialize() async {
-        for await result in Transaction.updates {
-            if case .verified(let transaction) = result {
+        guard updatesTask == nil else { return }
+
+        updatesTask = Task.detached(priority: .background) {
+            for await result in Transaction.updates {
+                guard case .verified(let transaction) = result else {
+                    continue
+                }
+
+                // 自动完成交易（订阅 / 非消耗）
                 await transaction.finish()
             }
         }
     }
-    
-    // 获取产品列表
-    static func fetchProducts(productIds: [String], completion: @escaping (Result<[Product], Error>) -> Void) {
+
+    // MARK: - Fetch Products
+    static func fetchProducts(
+        productIds: [String],
+        completion: @escaping (Result<[Product], Error>) -> Void
+    ) {
         Task {
             do {
                 let products = try await Product.products(for: productIds)
@@ -25,139 +37,170 @@ class SK2Handler {
             }
         }
     }
-    
-    // 检查是否有活跃订阅
+
+    // MARK: - Active Subscription Check
     static func hasActiveSubscription() async -> Bool {
         for await result in Transaction.currentEntitlements {
-            if case .verified(let transaction) = result {
+            if case .verified(let transaction) = result,
+               transaction.revocationDate == nil {
                 return true
             }
         }
         return false
     }
-    
-    // 购买产品
-    static func buyProduct(productId: String, completion: @escaping (Bool, Error?, Transaction?) -> Void) {
+
+    // MARK: - Buy Product
+    static func buyProduct(
+        productId: String,
+        completion: @escaping (Bool, Error?, Transaction?) -> Void
+    ) {
         Task {
             do {
                 let products = try await Product.products(for: [productId])
                 guard let product = products.first else {
-                    let error = NSError(domain: "SK2Error", code: 404, 
-                                      userInfo: [NSLocalizedDescriptionKey: "Product not found"])
-                    completion(false, error, nil)
+                    completion(false,
+                               NSError(
+                                domain: "SK2Error",
+                                code: 404,
+                                userInfo: [NSLocalizedDescriptionKey: "Product not found"]
+                               ),
+                               nil)
                     return
                 }
-                
+
                 let result = try await product.purchase()
-                
+
                 switch result {
                 case .success(let verification):
-                    switch verification {
-                    case .verified(let transaction):
-                        await transaction.finish()
-                        completion(true, nil, transaction)
-                    case .unverified(_, let error):
-                        completion(false, error, nil)
+                    guard case .verified(let transaction) = verification else {
+                        completion(false,
+                                   NSError(
+                                    domain: "SK2Error",
+                                    code: 403,
+                                    userInfo: [NSLocalizedDescriptionKey: "Transaction unverified"]
+                                   ),
+                                   nil)
+                        return
                     }
+
+                    await transaction.finish()
+                    completion(true, nil, transaction)
+
                 case .pending:
-                    let error = NSError(domain: "SK2Error", code: 100, 
-                                      userInfo: [NSLocalizedDescriptionKey: "Purchase pending"])
-                    completion(false, error, nil)
+                    completion(false,
+                               NSError(
+                                domain: "SK2Error",
+                                code: 100,
+                                userInfo: [NSLocalizedDescriptionKey: "Purchase pending"]
+                               ),
+                               nil)
+
                 case .userCancelled:
-                    let error = NSError(domain: "SK2Error", code: 401, 
-                                      userInfo: [NSLocalizedDescriptionKey: "Purchase cancelled"])
-                    completion(false, error, nil)
+                    completion(false,
+                               NSError(
+                                domain: "SK2Error",
+                                code: 401,
+                                userInfo: [NSLocalizedDescriptionKey: "Purchase cancelled"]
+                               ),
+                               nil)
+
                 @unknown default:
-                    let error = NSError(domain: "SK2Error", code: 999, 
-                                      userInfo: [NSLocalizedDescriptionKey: "Unknown error"])
-                    completion(false, error, nil)
+                    completion(false,
+                               NSError(
+                                domain: "SK2Error",
+                                code: 999,
+                                userInfo: [NSLocalizedDescriptionKey: "Unknown purchase result"]
+                               ),
+                               nil)
                 }
             } catch {
                 completion(false, error, nil)
             }
         }
     }
-    
-    // 恢复购买
-    static func restorePurchases(completion: @escaping (Bool, [[String: Any]]?, Error?) -> Void) {
+
+    // MARK: - Restore Purchases
+    static func restorePurchases(
+        completion: @escaping (Bool, [[String: Any]]?, Error?) -> Void
+    ) {
         Task {
-            var restoredItems: [[String: Any]] = []
-            
-            do {
-                for await result in Transaction.currentEntitlements {
-                    switch result {
-                    case .verified(let transaction):
-                        let item: [String: Any] = [
-                            "productId": transaction.productID,
-                            "transactionId": String(transaction.id),
-                            "purchaseTime": Int(transaction.purchaseDate.timeIntervalSince1970 * 1000),
-                            "originalPurchaseTime": transaction.originalPurchaseDate.map { 
-                                Int($0.timeIntervalSince1970 * 1000) 
-                            } ?? 0,
-                            "expireTime": transaction.expirationDate.map { 
-                                Int($0.timeIntervalSince1970 * 1000) 
-                            } ?? 0,
-                            "isUpgraded": transaction.isUpgraded,
-                            "offerId": transaction.offerID ?? "",
-                            "accountToken": transaction.appAccountToken?.uuidString ?? "",
-                            "rawJson": String(data: transaction.jsonRepresentation, encoding: .utf8) ?? ""
-                        ]
-                        restoredItems.append(item)
-                        
-                    case .unverified(_, let error):
-                        print("Unverified: \(error?.localizedDescription ?? "")")
-                    }
-                }
-                
-                completion(true, restoredItems.isEmpty ? nil : restoredItems, nil)
-                
-            } catch {
-                completion(false, nil, error)
+            var restored: [[String: Any]] = []
+
+            for await result in Transaction.currentEntitlements {
+                guard case .verified(let tx) = result else { continue }
+
+                restored.append([
+                    "productId": tx.productID,
+                    "transactionId": String(tx.id),
+                    "purchaseTime":
+                        Int(tx.purchaseDate.timeIntervalSince1970 * 1000),
+                    "originalPurchaseTime":
+                        Int(tx.originalPurchaseDate.timeIntervalSince1970 * 1000),
+                    "expireTime":
+                        tx.expirationDate.map {
+                            Int($0.timeIntervalSince1970 * 1000)
+                        } ?? 0,
+                    "isUpgraded": tx.isUpgraded,
+                    "offerId": tx.offerID ?? "",
+                    "accountToken": tx.appAccountToken?.uuidString ?? "",
+                    "rawJson":
+                        String(
+                            data: tx.jsonRepresentation,
+                            encoding: .utf8
+                        ) ?? ""
+                ])
             }
+
+            completion(true, restored.isEmpty ? nil : restored, nil)
         }
     }
-    
-    // 获取购买历史
+
+    // MARK: - Purchase History
     static func getPurchaseHistory() async -> [String] {
         var history: [String] = []
-        
+
         for await result in Transaction.all {
-            if case .verified(let transaction) = result {
-                if let json = String(data: transaction.jsonRepresentation, encoding: .utf8) {
-                    history.append(json)
-                }
+            guard case .verified(let tx) = result else { continue }
+            if let json = String(data: tx.jsonRepresentation, encoding: .utf8) {
+                history.append(json)
             }
         }
         return history
     }
-    
-    // 获取订阅状态
-    static func getSubscriptionStatus(productId: String) async -> [String: Any]? {
+
+    // MARK: - Subscription Status
+    static func getSubscriptionStatus(
+        productId: String
+    ) async -> [String: Any]? {
+
         for await result in Transaction.currentEntitlements {
-            if case .verified(let transaction) = result,
-               transaction.productID == productId {
-                
-                var status: [String: Any] = [
-                    "productId": transaction.productID,
-                    "transactionId": String(transaction.id),
-                    "isActive": true,
-                    "purchaseTime": Int(transaction.purchaseDate.timeIntervalSince1970 * 1000),
-                    "expireTime": 0
-                ]
-                
-                if let expireTime = transaction.expirationDate {
-                    status["expireTime"] = Int(expireTime.timeIntervalSince1970 * 1000)
-                    status["isExpired"] = expireTime < Date()
-                }
-                
-                if let revokeTime = transaction.revocationDate {
-                    status["revokeTime"] = Int(revokeTime.timeIntervalSince1970 * 1000)
-                    status["isRevoked"] = true
-                }
-                
-                return status
+            guard case .verified(let tx) = result,
+                  tx.productID == productId else { continue }
+
+            var status: [String: Any] = [
+                "productId": tx.productID,
+                "transactionId": String(tx.id),
+                "isActive": tx.revocationDate == nil,
+                "purchaseTime":
+                    Int(tx.purchaseDate.timeIntervalSince1970 * 1000),
+                "expireTime": 0
+            ]
+
+            if let expire = tx.expirationDate {
+                status["expireTime"] =
+                    Int(expire.timeIntervalSince1970 * 1000)
+                status["isExpired"] = expire < Date()
             }
+
+            if let revoke = tx.revocationDate {
+                status["revokeTime"] =
+                    Int(revoke.timeIntervalSince1970 * 1000)
+                status["isRevoked"] = true
+            }
+
+            return status
         }
+
         return nil
     }
 }
