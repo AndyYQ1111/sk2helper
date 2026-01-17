@@ -36,28 +36,6 @@ class _MyAppState extends State<MyApp> {
   @override
   void initState() {
     super.initState();
-    _initStoreKit();
-  }
-
-  // 初始化 StoreKit
-  Future<void> _initStoreKit() async {
-    setState(() => _isLoading = true);
-    _updateStatus('初始化 StoreKit...');
-
-    try {
-      await Sk2helper.initialize();
-      _updateStatus('StoreKit 初始化成功');
-
-      // 检查是否有活跃订阅
-      _hasActiveSub = await Sk2helper.hasActiveSubscription();
-
-      // 获取产品列表
-      await _fetchProducts();
-    } catch (e) {
-      _updateStatus('初始化失败: $e', isError: true);
-    } finally {
-      setState(() => _isLoading = false);
-    }
   }
 
   // 获取产品列表
