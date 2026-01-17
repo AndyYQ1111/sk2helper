@@ -9,7 +9,7 @@ Pod::Spec.new do |s|
   s.description      = <<-DESC
   A Flutter plugin that provides StoreKit 2 functionality for in-app purchases.
                        DESC
-  s.homepage         = 'http://example.com'
+  s.homepage         = 'https://github.com/AndyYQ1111/sk2helper.git'
   s.license          = { :file => '../LICENSE' }
   s.author           = { 'Your Company' => 'email@example.com' }
   s.source           = { :path => '.' }

@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:sk2helper/models.dart';
 import 'package:sk2helper/sk2helper.dart';
@@ -20,7 +21,7 @@ class _MyAppState extends State<MyApp> {
   bool _isLoading = false;
   String _status = '初始化中...';
   List<Product> _products = [];
-  List<Subscription> _subscriptions = [];
+  final List<Subscription> _subscriptions = [];
   List<RestoredPurchase> _restoredPurchases = [];
   bool _hasActiveSub = false;
 
@@ -76,7 +77,9 @@ class _MyAppState extends State<MyApp> {
             _subscriptions.add(status);
           }
         } catch (e) {
-          print('检查订阅状态失败: ${product.id} - $e');
+          if (kDebugMode) {
+            print('检查订阅状态失败: ${product.id} - $e');
+          }
         }
       }
     } catch (e) {
@@ -95,6 +98,10 @@ class _MyAppState extends State<MyApp> {
 
     try {
       final transaction = await Sk2helper.purchase(product.id);
+
+      if (kDebugMode) {
+        print('购买 transaction - $transaction');
+      }
 
       _updateStatus('购买成功: ${product.name}');
 
@@ -166,7 +173,9 @@ class _MyAppState extends State<MyApp> {
         setState(() {});
       }
     } catch (e) {
-      print('检查订阅状态失败: $productId - $e');
+      if (kDebugMode) {
+        print('检查订阅状态失败: $productId - $e');
+      }
     }
   }
 
@@ -245,7 +254,9 @@ class _MyAppState extends State<MyApp> {
     setState(() {
       _status = message;
     });
-    print('状态: $message');
+    if (kDebugMode) {
+      print('状态: $message');
+    }
   }
 
   // 构建产品卡片
@@ -544,7 +555,7 @@ class _MyAppState extends State<MyApp> {
                             subtitle: Text('交易: ${purchase.transactionId}'),
                             trailing: Text(_formatTime(purchase.purchaseTime)),
                           );
-                        }).toList(),
+                        }),
                       ],
                     ),
                   ),
