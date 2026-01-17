@@ -1,0 +1,13 @@
+.DS_Store
+*.lock
+.packages
+.pub/
+build/
+ios/.symlinks/
+android/.gradle/
+example/android/.gradle/
+example/ios/Pods/
+*.iml
+.idea/
+.vscode/
+*.log
