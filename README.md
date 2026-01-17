@@ -46,7 +46,7 @@
 
 ```
 dependencies:
-  sk2helper: ^1.0.0
+  sk2helper: ^0.0.4
 ```
 ## 然后执行：
 ```
